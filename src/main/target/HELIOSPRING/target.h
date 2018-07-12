@@ -51,15 +51,17 @@
 
 
 #define USE_FLASH
+#define FLASH_CS_PIN           PC14
+#define FLASH_SPI_INSTANCE     SPI3
 #define USE_FLASHFS
 #define USE_FLASH_M25P16
-#define FLASH_SPI_INSTANCE      SPI3
-#define FLASH_CS_PIN            SPI3_NSS_PIN
 #define ENABLE_BLACKBOX_LOGGING_ON_SPIFLASH_BY_DEFAULT
 
 #define USE_VCP
 #define USE_USB_DETECT
 #define USB_DETECT_PIN          PC5
+
+#define VBUS_SENSING_PIN        PC5
 
 #define USE_OSD
 #define USE_MAX7456
@@ -97,7 +99,7 @@
 #define SPI1_MISO_PIN           PA6
 #define SPI1_MOSI_PIN           PA7
 
-#define USE_DMA_SPI_DEVICE
+#define USE_DMA_SPI_DEVICE         SPI1
 
 #define DMA_SPI_NSS_PIN_SRC        GPIO_PinSource1
 #define DMA_SPI_NSS_PIN            GPIO_Pin_1
@@ -198,15 +200,13 @@
 
 #define CAMERA_CONTROL_PIN             PB6    // define dedicated camera_osd_control pin
 
-#define IMUF_DEFAULT_PITCH_Q  2000
-#define IMUF_DEFAULT_ROLL_Q   2000
-#define IMUF_DEFAULT_YAW_Q    2000
+#define IMUF_DEFAULT_PITCH_Q  3000
+#define IMUF_DEFAULT_ROLL_Q   3000
+#define IMUF_DEFAULT_YAW_Q    3000
 #define IMUF_DEFAULT_W        32
 #define IMUF_DEFAULT_LPF_HZ   120.0f
 
 #define USE_BUTTERED_PIDS true
-#undef USE_GYRO_OVERFLOW_CHECK
-#undef USE_GYRO_FAST_KALMAN
 
 #define DEFAULT_PIDS_ROLL   {50, 40, 20}
 #define DEFAULT_PIDS_PITCH  {50, 40, 22}

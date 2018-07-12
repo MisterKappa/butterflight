@@ -58,6 +58,7 @@
 #include "drivers/accgyro/accgyro_spi_mpu6000.h"
 #include "drivers/accgyro/accgyro_spi_mpu6500.h"
 #include "drivers/accgyro/accgyro_spi_mpu9250.h"
+#include "drivers/accgyro/accgyro_mpu.h"
 #ifdef USE_GYRO_IMUF9001
 #include "drivers/accgyro/accgyro_imuf9001.h"
 #include "rx/rx.h"
@@ -79,8 +80,7 @@ mpuResetFnPtr mpuResetFn;
 
 #define MPU_INQUIRY_MASK   0x7E
 
-#ifdef USE_I2C
-#ifndef USE_DMA_SPI_DEVICE
+#if defined(USE_I2C) && !defined(USE_DMA_SPI_DEVICE)
 static void mpu6050FindRevision(gyroDev_t *gyro)
 {
     // There is a map of revision contained in the android source tree which is quite comprehensive and may help to understand this code
@@ -114,7 +114,6 @@ static void mpu6050FindRevision(gyroDev_t *gyro)
         }
     }
 }
-#endif
 #endif
 
 /*
@@ -363,8 +362,8 @@ static bool detectSPISensorsAndUpdateDetectionResult(gyroDev_t *gyro)
 #endif
 
 #ifdef  USE_GYRO_SPI_MPU9250
-    #ifdef MPU9250_SPI_INSTANCE
-        spiBusSetInstance(&gyro->bus, MPU9250_SPI_INSTANCE);
+    #ifndef USE_DUAL_GYRO
+    spiBusSetInstance(&gyro->bus, MPU9250_SPI_INSTANCE);
     #endif
     #ifdef MPU9250_CS_PIN
     gyro->bus.busdev_u.spi.csnPin = gyro->bus.busdev_u.spi.csnPin == IO_NONE ? IOGetByTag(IO_TAG(MPU9250_CS_PIN)) : gyro->bus.busdev_u.spi.csnPin;
@@ -428,8 +427,7 @@ void mpuDetect(gyroDev_t *gyro)
 {
     // MPU datasheet specifies 30ms.
     delay(35);
-#ifdef USE_I2C
-#ifndef USE_DMA_SPI_DEVICE
+#if defined(USE_I2C) && !defined(USE_DMA_SPI_DEVICE)
     if (gyro->bus.bustype == BUSTYPE_NONE) {
         // if no bustype is selected try I2C first.
         gyro->bus.bustype = BUSTYPE_I2C;
@@ -462,7 +460,6 @@ void mpuDetect(gyroDev_t *gyro)
             return;
         }
     }
-#endif
 #endif
 
 #ifdef USE_SPI

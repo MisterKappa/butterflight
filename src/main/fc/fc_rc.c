@@ -54,8 +54,9 @@
 
 typedef float (applyRatesFn)(const int axis, float rcCommandf, const float rcCommandfAbs);
 
-static float setpointRate[3], rcDeflection[3], rcDeflectionAbs[3];
-static uint32_t setpointRateInt[3];
+static float rcDeflection[3], rcDeflectionAbs[3];
+static volatile float setpointRate[3];
+static volatile uint32_t setpointRateInt[3];
 static float throttlePIDAttenuation;
 static bool reverseMotors = false;
 static applyRatesFn *applyRates;
@@ -73,7 +74,7 @@ float getSetpointRate(int axis)
     return setpointRate[axis];
 }
 
-uint32_t getSetpointRateInt(int axis)
+uint32_t getSetpointRateInt(int axis) 
 {
     return setpointRateInt[axis];
 }
@@ -262,7 +263,10 @@ void processRcCommand(void)
 #endif
             calculateSetpointRate(axis);
         }
-
+        
+        #ifdef USE_GYRO_IMUF9001
+        isSetpointNew = 1;
+        #endif
         DEBUG_SET(DEBUG_RC_INTERPOLATION, 3, setpointRate[0]);
         #ifdef USE_GYRO_IMUF9001
         isSetpointNew = 1;

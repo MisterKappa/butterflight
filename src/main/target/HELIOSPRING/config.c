@@ -35,9 +35,11 @@
 
 
 void targetConfiguration(void) {
-    telemetryConfigMutable()->halfDuplex = true;
+    telemetryConfigMutable()->halfDuplex = false;
     voltageSensorADCConfigMutable(VOLTAGE_SENSOR_ADC_VBAT)->vbatscale = VBAT_SCALE;
-    // armingConfigMutable()->gyro_cal_on_first_arm = true;
+    rxConfigMutable()->rcInterpolation         = RC_SMOOTHING_MANUAL;
+    rxConfigMutable()->rcInterpolationInterval = 14;
+    rxConfigMutable()->rcInterpolationChannels = 4;
     motorConfigMutable()->dev.motorPwmProtocol = PWM_TYPE_MULTISHOT;
     gyroConfigMutable()->gyro_sync_denom  = 2; // 16KHZ GYRO
     pidConfigMutable()->pid_process_denom = 1; // 16KHZ PID

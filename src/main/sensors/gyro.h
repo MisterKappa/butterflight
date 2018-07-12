@@ -70,7 +70,6 @@ typedef enum {
     FILTER_LOWPASS = 0,
     FILTER_LOWPASS2
 } filterSlots;
-
 #if defined(USE_GYRO_IMUF9001)
 typedef enum {
     IMUF_RATE_32K = 0,
@@ -111,6 +110,9 @@ typedef struct gyroConfig_s {
     int16_t  yaw_spin_threshold;
 
     uint16_t gyroCalibrationDuration;  // Gyro calibration duration in 1/100 second
+
+    uint16_t gyro_filter_q;
+    uint16_t gyro_filter_r;
 #if defined(USE_GYRO_IMUF9001)
     uint16_t imuf_mode;
     uint16_t imuf_rate;
@@ -121,9 +123,6 @@ typedef struct gyroConfig_s {
     uint16_t imuf_pitch_lpf_cutoff_hz;
     uint16_t imuf_roll_lpf_cutoff_hz;
     uint16_t imuf_yaw_lpf_cutoff_hz;
-#else
-    uint16_t gyro_filter_q;
-    uint16_t gyro_filter_r;
 #endif
 } gyroConfig_t;
 
