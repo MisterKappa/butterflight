@@ -34,6 +34,12 @@
 #include "io/serial.h"
 
 #include "msp/msp_serial.h"
+#ifdef USE_GYRO_IMUF9001
+#include "drivers/light_led.h"
+#include "drivers/accgyro/accgyro.h"
+#include "drivers/accgyro/accgyro_mpu.h"
+#include "drivers/accgyro/accgyro_imuf9001.h"
+#endif
 
 static mspPort_t mspPorts[MAX_MSP_PORT_COUNT];
 
@@ -76,7 +82,7 @@ void mspSerialReleasePortIfAllocated(serialPort_t *serialPort)
     }
 }
 
-static bool mspSerialProcessReceivedData(mspPort_t *mspPort, uint8_t c)
+static bool mspSerialProcessReceivedData(mspPort_t *mspPort, uint32_t c)
 {
     if (mspPort->c_state == MSP_IDLE) {
         if (c == '$') {
@@ -197,6 +203,14 @@ static mspPostProcessFnPtr mspSerialProcessReceivedCommand(mspPort_t *msp, mspPr
     return mspPostProcessFn;
 }
 
+
+#ifdef USE_GYRO_IMUF9001
+#define IMUF_MAX_BIN_LENGTH 26000
+volatile uint32_t imuf_index = 0;
+static uint8_t imuf_bin_buff[IMUF_MAX_BIN_LENGTH];
+static uint32_t imuf_bin_size = 0;
+#endif
+
 static void mspEvaluateNonMspData(mspPort_t * mspPort, uint8_t receivedChar)
 {
 #ifdef USE_CLI
@@ -205,7 +219,32 @@ static void mspEvaluateNonMspData(mspPort_t * mspPort, uint8_t receivedChar)
         return;
     }
 #endif
+#ifdef USE_GYRO_IMUF9001
+    if (receivedChar == '!') {
+        //blink
+        imuf_index = 0;
 
+        imuf_bin_size  = serialRead(mspPort->port);
+        imuf_bin_size += (serialRead(mspPort->port) << 8);
+        imuf_bin_size += (serialRead(mspPort->port) << 16);
+        imuf_bin_size += (serialRead(mspPort->port) << 24);
+
+        while (imuf_index < imuf_bin_size)
+        {
+            if(!serialRxBytesWaiting(mspPort->port))
+            {
+                delay(2);
+            }
+            imuf_bin_buff[imuf_index++] = serialRead(mspPort->port);
+        }
+
+        //do CRC check here
+        imufBootloader();
+        imufUpdate(imuf_bin_buff, imuf_bin_size);
+        return;
+    }
+
+#endif
     if (receivedChar == serialConfig()->reboot_character) {
         mspPort->pendingRequest = MSP_PENDING_BOOTLOADER;
         return;
@@ -266,7 +305,7 @@ void mspSerialProcess(mspEvaluateNonMspData_e evaluateNonMspData, mspProcessComm
 
         mspPostProcessFnPtr mspPostProcessFn = NULL;
 
-        if (serialRxBytesWaiting(mspPort->port)) {
+        if (!mspPort->pendingRequest && serialRxBytesWaiting(mspPort->port)) {
             // There are bytes incoming - abort pending request
             mspPort->lastActivityMs = millis();
             mspPort->pendingRequest = MSP_PENDING_NONE;

@@ -3691,10 +3691,6 @@ typedef struct {
 
 #ifdef USE_GYRO_IMUF9001
 static void cliReportImufErrors(char *cmdline);
-static void cliImufUpdate(char *cmdline);
-#endif
-#ifdef MSD_ADDRESS
-static void cliMsd(char *cmdline);
 #endif
 
 static void cliHelp(char *cmdline);
@@ -3742,10 +3738,6 @@ const clicmd_t cmdTable[] = {
 #endif
 #ifdef USE_GYRO_IMUF9001
     CLI_COMMAND_DEF("reportimuferrors", "report imu-f comm errors", NULL, cliReportImufErrors),
-    CLI_COMMAND_DEF("imufupdate", "update imu-f's firmware", NULL, cliImufUpdate),
-#endif
-#ifdef MSD_ADDRESS
-    CLI_COMMAND_DEF("msd", "boot into USB drive mode to download log files", NULL, cliMsd),
 #endif
     CLI_COMMAND_DEF("help", NULL, NULL, cliHelp),
 #ifdef USE_LED_STRIP
@@ -3806,46 +3798,6 @@ static void cliReportImufErrors(char *cmdline)
     UNUSED(cmdline);
     cliPrintf("Current Comm Errors: %lu", crcErrorCount);
     cliPrintLinefeed();
-}
-
-static void cliImufUpdate(char *cmdline)
-{
-    UNUSED(cmdline);
-
-    if( (*((__IO uint32_t *)UPT_ADDRESS)) != 0xFFFFFFFF )
-    {
-        cliPrint("I muff, you muff, we all muff for IMU-F!");
-        cliPrintLinefeed();
-        (*((__IO uint32_t *)0x2001FFEC)) = 0xF431FA77;
-        delay(1000);
-        cliReboot();
-    }
-    else
-    {
-        cliPrint("Improper hex detected, please use the full hex from https://heliorc.com/wiring/");
-        cliPrintLinefeed();
-    }
-}
-#endif
-
-#ifdef MSD_ADDRESS
-static void cliMsd(char *cmdline)
-{
-    UNUSED(cmdline);
-
-    if( (*((__IO uint32_t *)MSD_ADDRESS)) != 0xFFFFFFFF )
-    {
-        cliPrint("Loading as USB drive!");
-        cliPrintLinefeed();
-        (*((__IO uint32_t *)0x2001FFF0)) = 0xF431FA11;
-        delay(1000);
-        cliReboot();
-    }
-    else
-    {
-        cliPrint("Improper hex detected, please use the full hex from https://heliorc.com/wiring/");
-        cliPrintLinefeed();
-    }
 }
 #endif
 
