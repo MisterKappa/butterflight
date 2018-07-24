@@ -95,6 +95,75 @@ void resetImuf9001(void)
     delay(100);
 }
 
+
+#if defined(STM32F405xx) || defined(STM32F415xx) || defined(STM32F407xx) || defined(STM32F417xx)
+#define GPIO_GET_INDEX(__GPIOx__)    (uint8_t)(((__GPIOx__) == (GPIOA))? 0U :\
+                                               ((__GPIOx__) == (GPIOB))? 1U :\
+                                               ((__GPIOx__) == (GPIOC))? 2U :\
+                                               ((__GPIOx__) == (GPIOD))? 3U :\
+                                               ((__GPIOx__) == (GPIOE))? 4U :\
+                                               ((__GPIOx__) == (GPIOF))? 5U :\
+                                               ((__GPIOx__) == (GPIOG))? 6U :\
+                                               ((__GPIOx__) == (GPIOH))? 7U : 8U)
+#endif
+
+void imufDeinitGpio(GPIO_TypeDef * GPIOx, uint16_t GPIO_Pin)
+{
+  uint32_t position;
+  uint32_t ioposition = 0x00U;
+  uint32_t iocurrent = 0x00U;
+  uint32_t tmp = 0x00U;
+
+  /* Check the parameters */
+  assert_param(IS_GPIO_ALL_INSTANCE(GPIOx));
+  
+  /* Configure the port pins */
+  for(position = 0U; position < 16; position++)
+  {
+    /* Get the IO position */
+    ioposition = 0x01U << position;
+    /* Get the current IO position */
+    iocurrent = (GPIO_Pin) & ioposition;
+
+    if(iocurrent == ioposition)
+    {
+      /*------------------------- GPIO Mode Configuration --------------------*/
+      /* Configure IO Direction in Input Floating Mode */
+      GPIOx->MODER &= ~(GPIO_MODER_MODER0 << (position * 2U));
+
+      /* Configure the default Alternate Function in current IO */
+      GPIOx->AFR[position >> 3U] &= ~(0xFU << ((uint32_t)(position & 0x07U) * 4U)) ;
+
+      /* Configure the default value for IO Speed */
+      GPIOx->OSPEEDR &= ~(GPIO_OSPEEDER_OSPEEDR0 << (position * 2U));
+
+      /* Configure the default value IO Output Type */
+      GPIOx->OTYPER  &= ~(GPIO_OTYPER_OT_0 << position) ;
+
+      /* Deactivate the Pull-up and Pull-down resistor for the current IO */
+      GPIOx->PUPDR &= ~(GPIO_PUPDR_PUPDR0 << (position * 2U));
+
+      /*------------------------- EXTI Mode Configuration --------------------*/
+      tmp = SYSCFG->EXTICR[position >> 2U];
+      tmp &= (0x0FU << (4U * (position & 0x03U)));
+      if(tmp == ((uint32_t)(GPIO_GET_INDEX(GPIOx)) << (4U * (position & 0x03U))))
+      {
+        /* Configure the External Interrupt or event for the current IO */
+        tmp = 0x0FU << (4U * (position & 0x03U));
+        SYSCFG->EXTICR[position >> 2U] &= ~tmp;
+
+        /* Clear EXTI line configuration */
+        EXTI->IMR &= ~((uint32_t)iocurrent);
+        EXTI->EMR &= ~((uint32_t)iocurrent);
+        
+        /* Clear Rising Falling edge configuration */
+        EXTI->RTSR &= ~((uint32_t)iocurrent);
+        EXTI->FTSR &= ~((uint32_t)iocurrent);
+      }
+    }
+  }
+}
+
 void initImuf9001(void) 
 {
     //GPIO manipulation should go into a fast GPIO driver and should be separate from the befhal
@@ -108,6 +177,7 @@ void initImuf9001(void)
 
         HAL_GPIO_Init(IMUF_RST_PORT, &GPIO_InitStruct);
     #else
+        imufDeinitGpio(IMUF_RST_PORT, IMUF_RST_PIN);
         GPIO_InitTypeDef gpioInitStruct;
         gpioInitStruct.GPIO_Pin   = IMUF_RST_PIN;
         gpioInitStruct.GPIO_Mode  = GPIO_Mode_OUT;
@@ -200,22 +270,23 @@ int imufBootloader() {
     //config BL pin as output (shared with EXTI, this happens before EXTI init though)
     //config pins
     #ifdef USE_HAL_F7_CRC
-    HAL_GPIO_DeInit(IMUF_EXTI_PORT, IMUF_EXTI_PIN);
-    GPIO_InitTypeDef  GPIO_InitStruct;
-    GPIO_InitStruct.Pin       = IMUF_EXTI_PIN;
-    GPIO_InitStruct.Mode      = GPIO_MODE_OUTPUT_PP;
-    GPIO_InitStruct.Pull      = GPIO_NOPULL;
-    GPIO_InitStruct.Speed     = GPIO_SPEED_HIGH;
+        HAL_GPIO_DeInit(IMUF_EXTI_PORT, IMUF_EXTI_PIN);
+        GPIO_InitTypeDef  GPIO_InitStruct;
+        GPIO_InitStruct.Pin       = IMUF_EXTI_PIN;
+        GPIO_InitStruct.Mode      = GPIO_MODE_OUTPUT_PP;
+        GPIO_InitStruct.Pull      = GPIO_NOPULL;
+        GPIO_InitStruct.Speed     = GPIO_SPEED_HIGH;
 
-    HAL_GPIO_Init(IMUF_EXTI_PORT, &GPIO_InitStruct);
+        HAL_GPIO_Init(IMUF_EXTI_PORT, &GPIO_InitStruct);
     #else
-    GPIO_InitTypeDef gpioInitStruct;
-    gpioInitStruct.GPIO_Pin   = IMUF_EXTI_PIN;
-    gpioInitStruct.GPIO_Mode  = GPIO_Mode_OUT;
-    gpioInitStruct.GPIO_Speed = GPIO_Speed_50MHz;
-    gpioInitStruct.GPIO_OType = GPIO_OType_PP;
-    gpioInitStruct.GPIO_PuPd  = GPIO_PuPd_NOPULL;
-    GPIO_Init(IMUF_EXTI_PORT, &gpioInitStruct);
+        imufDeinitGpio(IMUF_RST_PORT, IMUF_RST_PIN);
+        GPIO_InitTypeDef gpioInitStruct;
+        gpioInitStruct.GPIO_Pin   = IMUF_EXTI_PIN;
+        gpioInitStruct.GPIO_Mode  = GPIO_Mode_OUT;
+        gpioInitStruct.GPIO_Speed = GPIO_Speed_50MHz;
+        gpioInitStruct.GPIO_OType = GPIO_OType_PP;
+        gpioInitStruct.GPIO_PuPd  = GPIO_PuPd_NOPULL;
+        GPIO_Init(IMUF_EXTI_PORT, &gpioInitStruct);
     #endif
     //config pins
     delay(200);
@@ -431,7 +502,7 @@ void imufSpiGyroInit(gyroDev_t *gyro)
     imufCommand_t rxData;
 
     rxData.param1 = VerifyAllowedCommMode(gyroConfig()->imuf_mode);
-    rxData.param2 = ( (uint16_t)(gyroConfig()->imuf_rate+1) << 16)              | (uint16_t)gyroConfig()->imuf_w;
+    rxData.param2 = ( (uint16_t)(gyroConfig()->imuf_rate+1) << 16)            | (uint16_t)gyroConfig()->imuf_w;
     rxData.param3 = ( (uint16_t)gyroConfig()->imuf_roll_q << 16)              | (uint16_t)gyroConfig()->imuf_pitch_q;
     rxData.param4 = ( (uint16_t)gyroConfig()->imuf_yaw_q << 16)               | (uint16_t)gyroConfig()->imuf_roll_lpf_cutoff_hz;
     rxData.param5 = ( (uint16_t)gyroConfig()->imuf_pitch_lpf_cutoff_hz << 16) | (uint16_t)gyroConfig()->imuf_yaw_lpf_cutoff_hz;
