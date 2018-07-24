@@ -21,6 +21,7 @@
 #define USBD_PRODUCT_STRING     "HELIOSPRING"
 #define UPT_ADDRESS  0x080F0000
 #define MSD_ADDRESS  0x080E0000
+#define MSP_OVER_CLI
 
 #define LED0_PIN                PB7
 
