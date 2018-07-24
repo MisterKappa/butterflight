@@ -114,9 +114,6 @@ void imufDeinitGpio(GPIO_TypeDef * GPIOx, uint16_t GPIO_Pin)
   uint32_t iocurrent = 0x00U;
   uint32_t tmp = 0x00U;
 
-  /* Check the parameters */
-  assert_param(IS_GPIO_ALL_INSTANCE(GPIOx));
-  
   /* Configure the port pins */
   for(position = 0U; position < 16; position++)
   {
@@ -177,6 +174,7 @@ void initImuf9001(void)
 
         HAL_GPIO_Init(IMUF_RST_PORT, &GPIO_InitStruct);
     #else
+        //GPIO_DeInit(IMUF_RST_PORT);
         imufDeinitGpio(IMUF_RST_PORT, IMUF_RST_PIN);
         GPIO_InitTypeDef gpioInitStruct;
         gpioInitStruct.GPIO_Pin   = IMUF_RST_PIN;
@@ -227,6 +225,9 @@ static int imuf9001SendReceiveCommand(const gyroDev_t *gyro, gyroCommands_t comm
             if (imufSendReceiveSpiBlocking(&(gyro->bus), (uint8_t *)&command, (uint8_t *)reply, sizeof(imufCommand_t)))
             {
                 crcCalc = getCrcImuf9001((uint32_t *)reply, 11);
+                debug[1] = crcCalc;
+                debug[2] = reply->command;
+                debug[3] = reply->crc;
                 //this is the only valid reply we'll get if we're in BL mode
                 if(crcCalc == reply->crc && (reply->command == IMUF_COMMAND_LISTENING || reply->command == BL_LISTENING)) //this tells us the IMU was listening for a command, else we need to reset synbc
                 {
@@ -279,7 +280,8 @@ int imufBootloader() {
 
         HAL_GPIO_Init(IMUF_EXTI_PORT, &GPIO_InitStruct);
     #else
-        imufDeinitGpio(IMUF_RST_PORT, IMUF_RST_PIN);
+        //GPIO_DeInit(IMUF_EXTI_PORT);
+        imufDeinitGpio(IMUF_EXTI_PORT, IMUF_EXTI_PIN);
         GPIO_InitTypeDef gpioInitStruct;
         gpioInitStruct.GPIO_Pin   = IMUF_EXTI_PIN;
         gpioInitStruct.GPIO_Mode  = GPIO_Mode_OUT;
@@ -327,15 +329,20 @@ int imufUpdate(uint8_t *buff, uint32_t bin_length)
     imufCommand_t data;
     memset(&data, 0, sizeof(data));
 
+    debug[0] = 1;
     //check if BL is active
     if (imuf9001SendReceiveCommand(imufDev, BL_REPORT_INFO, &reply, &data))
     {
+    debug[0] = 2;
         //erase firmware on MCU
         if( imuf9001SendReceiveCommand(imufDev, BL_ERASE_ALL, &reply, &data) )
         {
+    debug[0] = 3;
             //good data
             if( imuf9001SendReceiveCommand(imufDev, BL_PREPARE_PROGRAM, &reply, &data) )
             {
+    debug[0] = 4;
+
                 //blink
                 for(uint32_t x = 0; x<10; x++)
                 {

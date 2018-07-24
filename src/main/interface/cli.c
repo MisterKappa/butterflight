@@ -2262,6 +2262,33 @@ static void cliBootloader(char *cmdLine)
     cliRebootEx(true);
 }
 
+static void cliDebug(char *cmdline)
+{
+    UNUSED(cmdline);
+
+    for (int x=0;x<4;x++)
+    {
+        cliPrintLinef("DEBUG %d:%d", x, debug[x]);
+    }
+}
+
+static void cliImufDebug(char *cmdline)
+{
+    uint8_t *buff = "hi";
+
+    imufBootloader();
+    for(uint32_t x = 0; x<10; x++)
+    {
+        LED0_TOGGLE;
+        delay(200);
+    }
+    LED0_OFF;
+
+    UNUSED(cmdline);
+    imufUpdate(buff, 1);
+    cliDebug(cmdline);
+}
+
 static void cliExit(char *cmdline)
 {
     UNUSED(cmdline);
@@ -3717,6 +3744,8 @@ const clicmd_t cmdTable[] = {
 #ifdef USE_ESCSERIAL
     CLI_COMMAND_DEF("escprog", "passthrough esc to serial", "<mode [sk/bl/ki/cc]> <index>", cliEscPassthrough),
 #endif
+    CLI_COMMAND_DEF("imufdebug", NULL, NULL, cliImufDebug),
+    CLI_COMMAND_DEF("debug", NULL, NULL, cliDebug),
     CLI_COMMAND_DEF("exit", NULL, NULL, cliExit),
     CLI_COMMAND_DEF("feature", "configure features",
         "list\r\n"

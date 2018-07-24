@@ -229,17 +229,30 @@ static void mspEvaluateNonMspData(mspPort_t * mspPort, uint8_t receivedChar)
         imuf_bin_size += (serialRead(mspPort->port) << 16);
         imuf_bin_size += (serialRead(mspPort->port) << 24);
 
+
+
         while (imuf_index < imuf_bin_size)
         {
-            if(!serialRxBytesWaiting(mspPort->port))
-            {
-                delay(2);
-            }
+            while(!serialRxBytesWaiting(mspPort->port));
             imuf_bin_buff[imuf_index++] = serialRead(mspPort->port);
         }
 
+        for(uint32_t x = 0; x<10; x++)
+        {
+            LED0_TOGGLE;
+            delay(200);
+        }
+        LED0_OFF;
+        delay(1000);
         //do CRC check here
         imufBootloader();
+        for(uint32_t x = 0; x<10; x++)
+        {
+            LED0_TOGGLE;
+            delay(200);
+        }
+        LED0_OFF;
+        delay(1000);
         imufUpdate(imuf_bin_buff, imuf_bin_size);
         return;
     }
