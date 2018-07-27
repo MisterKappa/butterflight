@@ -266,8 +266,13 @@ static int imuf9001SendReceiveCommand(const gyroDev_t *gyro, gyroCommands_t comm
     return 0;
 }
 
-int imufBootloader() {
+int imufBootloader()
+{
     
+    imufCommand_t reply;
+    imufCommand_t data;
+    memset(&data, 0, sizeof(data));
+
     //config BL pin as output (shared with EXTI, this happens before EXTI init though)
     //config pins
     #ifdef USE_HAL_F7_CRC
@@ -320,7 +325,14 @@ int imufBootloader() {
     //config pins
     delay(200);
 
-    return 0;
+    if (imuf9001SendReceiveCommand(imufDev, BL_REPORT_INFO, &reply, &data))
+    {
+        return 1;
+    }
+    else
+    {
+        return 0;
+    }
 }
 
 int imufUpdate(uint8_t *buff, uint32_t bin_length)
@@ -391,9 +403,6 @@ int imufUpdate(uint8_t *buff, uint32_t bin_length)
                         delay(20);
                     }
                     LED0_OFF;
-                    systemConfigMutable()->debug_mode = DEBUG_MODE;
-                    writeEEPROM();
-                    systemReset();
                     return 1;
                 }
             }

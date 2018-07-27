@@ -203,14 +203,6 @@ static mspPostProcessFnPtr mspSerialProcessReceivedCommand(mspPort_t *msp, mspPr
     return mspPostProcessFn;
 }
 
-
-#ifdef USE_GYRO_IMUF9001
-#define IMUF_MAX_BIN_LENGTH 26000
-volatile uint32_t imuf_index = 0;
-static uint8_t imuf_bin_buff[IMUF_MAX_BIN_LENGTH];
-static uint32_t imuf_bin_size = 0;
-#endif
-
 static void mspEvaluateNonMspData(mspPort_t * mspPort, uint8_t receivedChar)
 {
 #ifdef USE_CLI
@@ -219,8 +211,9 @@ static void mspEvaluateNonMspData(mspPort_t * mspPort, uint8_t receivedChar)
         return;
     }
 #endif
+/*
 #ifdef USE_GYRO_IMUF9001
-    if (receivedChar == '!') {
+    if ( 0 && receivedChar == '!') {
         //blink
         imuf_index = 0;
 
@@ -258,6 +251,7 @@ static void mspEvaluateNonMspData(mspPort_t * mspPort, uint8_t receivedChar)
     }
 
 #endif
+*/
     if (receivedChar == serialConfig()->reboot_character) {
         mspPort->pendingRequest = MSP_PENDING_BOOTLOADER;
         return;

@@ -2275,11 +2275,90 @@ static void cliDebug(char *cmdline)
     }
 }
 
+#ifdef USE_GYRO_IMUF9001
+#define IMUF_CUSTOM_BUFF_LENGTH 26000
+volatile uint32_t imuf_index = 0;
+static   uint8_t  imuf_custom_buff[IMUF_CUSTOM_BUFF_LENGTH];
+static   uint32_t imuf_buff_ptr = 0;
+static   int      imuf_bin_safe = 0;
+
+
+static void cliImufBootloaderMode(char *cmdline)
+{
+    (void)(cmdline);
+    if(imufBootloader())
+    {
+        cliPrintLine("BOOTLOADER");
+    }
+    else
+    {
+        cliPrintLine("FAIL");
+    }
+}
+
+static void cliImufLoadBin(char *cmdline)
+{
+    uint32_t dataSize;
+
+    if(cmdline[0] == '!')
+    {
+        imuf_bin_safe = 1;
+        imuf_buff_ptr = 0;
+        memset(imuf_custom_buff, 0, IMUF_CUSTOM_BUFF_LENGTH);
+        cliPrintLine("START");
+    }
+    else
+    {
+        if (imuf_bin_safe)
+        {
+            dataSize += (cmdline[1] << 0);
+            dataSize += (cmdline[2] << 8);
+            dataSize += (cmdline[3] << 16);
+            dataSize += (cmdline[4] << 24);
+            if ( (imuf_buff_ptr+dataSize) < IMUF_CUSTOM_BUFF_LENGTH )
+            {
+                memcpy(imuf_custom_buff+imuf_buff_ptr, &(cmdline[9]), dataSize);
+                imuf_buff_ptr += dataSize;
+                cliPrintLine("LOADED");
+            }
+            else
+            {
+                cliPrintLine("WOAH!");
+            }
+        }
+        else
+        {
+            cliPrintLine("PFFFT!");
+        }
+    }
+}
+
+static void cliImufFlashBin(char *cmdline)
+{
+    (void)(cmdline);
+    if (imufUpdate(imuf_custom_buff, imuf_buff_ptr))
+    {
+        cliPrintLine("SUCCESS");
+        bufWriterFlush(cliWriter);
+
+        *cliBuffer = '\0';
+        bufferIndex = 0;
+        cliMode = 0;
+        // incase a motor was left running during motortest, clear it here
+        mixerResetDisarmedMotors();
+        cliReboot();
+
+        cliWriter = NULL;
+    }
+}
+
 static void cliImufDebug(char *cmdline)
 {
-    uint8_t *buff = "hi";
+    (void)(cmdline);
+    /*
+    uint8_t *buff = "woohoo!";
 
-    imufBootloader();
+    
     for(uint32_t x = 0; x<10; x++)
     {
         LED0_TOGGLE;
@@ -2290,7 +2369,11 @@ static void cliImufDebug(char *cmdline)
     UNUSED(cmdline);
     imufUpdate(buff, 1);
     cliDebug(cmdline);
+    */
+    cliPrintLine("WOOHOO!");
 }
+#endif
+
 #ifdef MSP_OVER_CLI
 sbuf_t buft;
 uint8_t bufPtr[256];
@@ -3778,6 +3861,9 @@ const clicmd_t cmdTable[] = {
     CLI_COMMAND_DEF("escprog", "passthrough esc to serial", "<mode [sk/bl/ki/cc]> <index>", cliEscPassthrough),
 #endif
 #ifdef USE_GYRO_IMUF9001
+    CLI_COMMAND_DEF("imufbootloader", NULL, NULL, cliImufBootloaderMode),
+    CLI_COMMAND_DEF("imufloadbin", NULL, NULL, cliImufLoadBin),
+    CLI_COMMAND_DEF("imufflashbin", NULL, NULL, cliImufFlashBin),
     CLI_COMMAND_DEF("imufdebug", NULL, NULL, cliImufDebug),
 #endif
     CLI_COMMAND_DEF("debug", NULL, NULL, cliDebug),
