@@ -169,6 +169,21 @@ static uint32_t bufferIndex = 0;
 
 static bool configIsInCopy = false;
 
+static int      cliBinMode = 0;
+static uint32_t cliBinModeDataSize;
+static uint32_t cliBinModeDataPtr;
+static uint8_t* cliBinModeData;
+static void (*cliBinModFunctionCallback)();
+
+#ifdef USE_GYRO_IMUF9001
+#define IMUF_CUSTOM_BUFF_LENGTH 26000
+volatile uint32_t imuf_index = 0;
+static   uint8_t  imuf_custom_buff[IMUF_CUSTOM_BUFF_LENGTH];
+static   uint32_t imuf_buff_ptr = 0;
+static   int      imuf_bin_safe = 0;
+
+#endif
+
 static const char* const emptyName = "-";
 static const char* const emptryString = "";
 
@@ -2276,11 +2291,6 @@ static void cliDebug(char *cmdline)
 }
 
 #ifdef USE_GYRO_IMUF9001
-#define IMUF_CUSTOM_BUFF_LENGTH 26000
-volatile uint32_t imuf_index = 0;
-static   uint8_t  imuf_custom_buff[IMUF_CUSTOM_BUFF_LENGTH];
-static   uint32_t imuf_buff_ptr = 0;
-static   int      imuf_bin_safe = 0;
 
 
 static void cliImufBootloaderMode(char *cmdline)
@@ -2296,6 +2306,36 @@ static void cliImufBootloaderMode(char *cmdline)
     }
 }
 
+static void flashImufBin(void)
+{
+    if (imufUpdate(imuf_custom_buff, cliBinModeDataSize))
+    {
+        cliPrintLine("SUCCESS");
+        bufWriterFlush(cliWriter);
+
+        *cliBuffer = '\0';
+        bufferIndex = 0;
+        cliMode = 0;
+        // incase a motor was left running during motortest, clear it here
+        mixerResetDisarmedMotors();
+        cliReboot();
+
+        cliWriter = NULL;
+    }
+    else
+    {
+        while(1)
+        {
+            for(uint32_t x = 0; x<10; x++)
+            {
+                LED0_TOGGLE;
+                delay(200);
+            }
+            LED0_OFF;
+        }
+    }
+}
+
 static void cliImufLoadBin(char *cmdline)
 {
     uint32_t dataSize;
@@ -2305,7 +2345,12 @@ static void cliImufLoadBin(char *cmdline)
         imuf_bin_safe = 1;
         imuf_buff_ptr = 0;
         memset(imuf_custom_buff, 0, IMUF_CUSTOM_BUFF_LENGTH);
-        cliPrintLine("START");
+        //Set CLI binary mode
+        cliBinMode         = 1;
+        cliBinModeDataSize = 0;
+        cliBinModeData     = imuf_custom_buff;
+        cliBinModeDataPtr  = 0;
+        cliBinModFunctionCallback = flashImufBin;
     }
     else
     {
@@ -3981,103 +4026,134 @@ void cliProcess(void)
     // Be a little bit tricky.  Flush the last inputs buffer, if any.
     bufWriterFlush(cliWriter);
 
-    while (serialRxBytesWaiting(cliPort)) {
-        uint8_t c = serialRead(cliPort);
-        if (c == '\t' || c == '?') {
-            // do tab completion
-            const clicmd_t *cmd, *pstart = NULL, *pend = NULL;
-            uint32_t i = bufferIndex;
-            for (cmd = cmdTable; cmd < cmdTable + ARRAYLEN(cmdTable); cmd++) {
-                if (bufferIndex && (strncasecmp(cliBuffer, cmd->name, bufferIndex) != 0))
-                    continue;
-                if (!pstart)
-                    pstart = cmd;
-                pend = cmd;
-            }
-            if (pstart) {    /* Buffer matches one or more commands */
-                for (; ; bufferIndex++) {
-                    if (pstart->name[bufferIndex] != pend->name[bufferIndex])
-                        break;
-                    if (!pstart->name[bufferIndex] && bufferIndex < sizeof(cliBuffer) - 2) {
-                        /* Unambiguous -- append a space */
-                        cliBuffer[bufferIndex++] = ' ';
-                        cliBuffer[bufferIndex] = '\0';
-                        break;
-                    }
-                    cliBuffer[bufferIndex] = pstart->name[bufferIndex];
-                }
-            }
-            if (!bufferIndex || pstart != pend) {
-                /* Print list of ambiguous matches */
-                cliPrint("\r\033[K");
-                for (cmd = pstart; cmd <= pend; cmd++) {
-                    cliPrint(cmd->name);
-                    cliWrite('\t');
-                }
-                cliPrompt();
-                i = 0;    /* Redraw prompt */
-            }
-            for (; i < bufferIndex; i++)
-                cliWrite(cliBuffer[i]);
-        } else if (!bufferIndex && c == 4) {   // CTRL-D
-            cliExit(cliBuffer);
-            return;
-        } else if (c == 12) {                  // NewPage / CTRL-L
-            // clear screen
-            cliPrint("\033[2J\033[1;1H");
-            cliPrompt();
-        } else if (bufferIndex && (c == '\n' || c == '\r')) {
-            // enter pressed
-            cliPrintLinefeed();
+    if(cliBinMode)
+    {
+        if (!cliBinModeDataSize)
+        {
+            cliBinModeDataSize += (serialRead(cliPort) << 0);
+            while(!serialRxBytesWaiting(cliPort));
+            cliBinModeDataSize += (serialRead(cliPort) << 8);
+            while(!serialRxBytesWaiting(cliPort));
+            cliBinModeDataSize += (serialRead(cliPort) << 16);
+            while(!serialRxBytesWaiting(cliPort));
+            cliBinModeDataSize += (serialRead(cliPort) << 24);
+            while(!serialRxBytesWaiting(cliPort));
+            cliBinModeDataPtr  += 4;
+        }
 
-            // Strip comment starting with # from line
-            char *p = cliBuffer;
-            p = strchr(p, '#');
-            if (NULL != p) {
-                bufferIndex = (uint32_t)(p - cliBuffer);
-            }
+        while (cliBinModeDataPtr < cliBinModeDataSize)
+        {
+            while(!serialRxBytesWaiting(cliPort));
+                cliBinModeData[cliBinModeDataPtr++] = serialRead(cliPort);
+        }
 
-            // Strip trailing whitespace
-            while (bufferIndex > 0 && cliBuffer[bufferIndex - 1] == ' ') {
-                bufferIndex--;
-            }
+        cliBinMode = 0;
+        cliBinModFunctionCallback();
 
-            // Process non-empty lines
-            if (bufferIndex > 0) {
-                cliBuffer[bufferIndex] = 0; // null terminate
+    }
+    else
+    {
+        while (serialRxBytesWaiting(cliPort)) {
 
-                const clicmd_t *cmd;
-                char *options;
+            uint8_t c = serialRead(cliPort);
+
+            if (c == '\t' || c == '?') {
+                // do tab completion
+                const clicmd_t *cmd, *pstart = NULL, *pend = NULL;
+                uint32_t i = bufferIndex;
                 for (cmd = cmdTable; cmd < cmdTable + ARRAYLEN(cmdTable); cmd++) {
-                    if ((options = checkCommand(cliBuffer, cmd->name))) {
-                        break;
+                    if (bufferIndex && (strncasecmp(cliBuffer, cmd->name, bufferIndex) != 0))
+                        continue;
+                    if (!pstart)
+                        pstart = cmd;
+                    pend = cmd;
+                }
+                if (pstart) {    /* Buffer matches one or more commands */
+                    for (; ; bufferIndex++) {
+                        if (pstart->name[bufferIndex] != pend->name[bufferIndex])
+                            break;
+                        if (!pstart->name[bufferIndex] && bufferIndex < sizeof(cliBuffer) - 2) {
+                            /* Unambiguous -- append a space */
+                            cliBuffer[bufferIndex++] = ' ';
+                            cliBuffer[bufferIndex] = '\0';
+                            break;
+                        }
+                        cliBuffer[bufferIndex] = pstart->name[bufferIndex];
                     }
                 }
-                if (cmd < cmdTable + ARRAYLEN(cmdTable))
-                    cmd->func(options);
-                else
-                    cliPrint("Unknown command, try 'help'");
-                bufferIndex = 0;
-            }
-
-            memset(cliBuffer, 0, sizeof(cliBuffer));
-
-            // 'exit' will reset this flag, so we don't need to print prompt again
-            if (!cliMode)
+                if (!bufferIndex || pstart != pend) {
+                    /* Print list of ambiguous matches */
+                    cliPrint("\r\033[K");
+                    for (cmd = pstart; cmd <= pend; cmd++) {
+                        cliPrint(cmd->name);
+                        cliWrite('\t');
+                    }
+                    cliPrompt();
+                    i = 0;    /* Redraw prompt */
+                }
+                for (; i < bufferIndex; i++)
+                    cliWrite(cliBuffer[i]);
+            } else if (!bufferIndex && c == 4) {   // CTRL-D
+                cliExit(cliBuffer);
                 return;
+            } else if (c == 12) {                  // NewPage / CTRL-L
+                // clear screen
+                cliPrint("\033[2J\033[1;1H");
+                cliPrompt();
+            } else if (bufferIndex && (c == '\n' || c == '\r')) {
+                // enter pressed
+                cliPrintLinefeed();
 
-            cliPrompt();
-        } else if (c == 127) {
-            // backspace
-            if (bufferIndex) {
-                cliBuffer[--bufferIndex] = 0;
-                cliPrint("\010 \010");
+                // Strip comment starting with # from line
+                char *p = cliBuffer;
+                p = strchr(p, '#');
+                if (NULL != p) {
+                    bufferIndex = (uint32_t)(p - cliBuffer);
+                }
+
+                // Strip trailing whitespace
+                while (bufferIndex > 0 && cliBuffer[bufferIndex - 1] == ' ') {
+                    bufferIndex--;
+                }
+
+                // Process non-empty lines
+                if (bufferIndex > 0) {
+                    cliBuffer[bufferIndex] = 0; // null terminate
+
+                    const clicmd_t *cmd;
+                    char *options;
+                    for (cmd = cmdTable; cmd < cmdTable + ARRAYLEN(cmdTable); cmd++) {
+                        if ((options = checkCommand(cliBuffer, cmd->name))) {
+                            break;
+                        }
+                    }
+                    if (cmd < cmdTable + ARRAYLEN(cmdTable))
+                        cmd->func(options);
+                    else
+                        cliPrint("Unknown command, try 'help'");
+                    bufferIndex = 0;
+                }
+
+                memset(cliBuffer, 0, sizeof(cliBuffer));
+
+                // 'exit' will reset this flag, so we don't need to print prompt again
+                if (!cliMode)
+                    return;
+
+                cliPrompt();
+            } else if (c == 127) {
+                // backspace
+                if (bufferIndex) {
+                    cliBuffer[--bufferIndex] = 0;
+                    cliPrint("\010 \010");
+                }
+            } else if (bufferIndex < sizeof(cliBuffer) && c >= 32 && c <= 126) {
+                if (!bufferIndex && c == ' ')
+                    continue; // Ignore leading spaces
+                cliBuffer[bufferIndex++] = c;
+                cliWrite(c);
             }
-        } else if (bufferIndex < sizeof(cliBuffer) && c >= 32 && c <= 126) {
-            if (!bufferIndex && c == ' ')
-                continue; // Ignore leading spaces
-            cliBuffer[bufferIndex++] = c;
-            cliWrite(c);
+
         }
     }
 }
