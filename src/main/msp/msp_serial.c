@@ -207,51 +207,16 @@ static void mspEvaluateNonMspData(mspPort_t * mspPort, uint8_t receivedChar)
 {
 #ifdef USE_CLI
     if (receivedChar == '#') {
+        cliSmartMode = 0;
+        mspPort->pendingRequest = MSP_PENDING_CLI;
+        return;
+    }
+    if (receivedChar == '!') {
+        cliSmartMode = 1;
         mspPort->pendingRequest = MSP_PENDING_CLI;
         return;
     }
 #endif
-/*
-#ifdef USE_GYRO_IMUF9001
-    if ( 0 && receivedChar == '!') {
-        //blink
-        imuf_index = 0;
-
-        imuf_bin_size  = serialRead(mspPort->port);
-        imuf_bin_size += (serialRead(mspPort->port) << 8);
-        imuf_bin_size += (serialRead(mspPort->port) << 16);
-        imuf_bin_size += (serialRead(mspPort->port) << 24);
-
-
-
-        while (imuf_index < imuf_bin_size)
-        {
-            while(!serialRxBytesWaiting(mspPort->port));
-            imuf_bin_buff[imuf_index++] = serialRead(mspPort->port);
-        }
-
-        for(uint32_t x = 0; x<10; x++)
-        {
-            LED0_TOGGLE;
-            delay(200);
-        }
-        LED0_OFF;
-        delay(1000);
-        //do CRC check here
-        imufBootloader();
-        for(uint32_t x = 0; x<10; x++)
-        {
-            LED0_TOGGLE;
-            delay(200);
-        }
-        LED0_OFF;
-        delay(1000);
-        imufUpdate(imuf_bin_buff, imuf_bin_size);
-        return;
-    }
-
-#endif
-*/
     if (receivedChar == serialConfig()->reboot_character) {
         mspPort->pendingRequest = MSP_PENDING_BOOTLOADER;
         return;

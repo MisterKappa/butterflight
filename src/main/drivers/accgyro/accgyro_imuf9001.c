@@ -225,9 +225,6 @@ static int imuf9001SendReceiveCommand(const gyroDev_t *gyro, gyroCommands_t comm
             if (imufSendReceiveSpiBlocking(&(gyro->bus), (uint8_t *)&command, (uint8_t *)reply, sizeof(imufCommand_t)))
             {
                 crcCalc = getCrcImuf9001((uint32_t *)reply, 11);
-                debug[1] = crcCalc;
-                debug[2] = reply->command;
-                debug[3] = reply->crc;
                 //this is the only valid reply we'll get if we're in BL mode
                 if(crcCalc == reply->crc && (reply->command == IMUF_COMMAND_LISTENING || reply->command == BL_LISTENING)) //this tells us the IMU was listening for a command, else we need to reset synbc
                 {
@@ -341,19 +338,15 @@ int imufUpdate(uint8_t *buff, uint32_t bin_length)
     imufCommand_t data;
     memset(&data, 0, sizeof(data));
 
-    debug[0] = 1;
     //check if BL is active
     if (imuf9001SendReceiveCommand(imufDev, BL_REPORT_INFO, &reply, &data))
     {
-    debug[0] = 2;
         //erase firmware on MCU
         if( imuf9001SendReceiveCommand(imufDev, BL_ERASE_ALL, &reply, &data) )
         {
-    debug[0] = 3;
             //good data
             if( imuf9001SendReceiveCommand(imufDev, BL_PREPARE_PROGRAM, &reply, &data) )
             {
-    debug[0] = 4;
 
                 //blink
                 for(uint32_t x = 0; x<10; x++)
@@ -453,14 +446,15 @@ uint8_t imuf9001SpiDetect(const gyroDev_t *gyro)
 
     hardwareInitialised = true;
 
-    for (int x=0; x<10; x++)
+    for (int x=0; x<3; x++)
     {
         int returnCheck;
         if (x)
         {
-            resetImuf9001();
-            delay(300 * x);
+            initImuf9001();
+            delay(200 * x);
         }
+
         returnCheck = imuf9001Whoami(gyro);
         if(returnCheck)
         {
